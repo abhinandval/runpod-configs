@@ -23,11 +23,28 @@ GPU count         1
 
 ## Build and publish
 
-Build for the RunPod NVIDIA worker architecture and push to a registry you control:
+The repository contains a manual-only workflow at
+`.github/workflows/publish-qwen38-image.yml`. From the GitHub Actions tab,
+select **Publish Qwen3.8-27B image**, choose **Run workflow**, and run it for
+the commit you want to publish. It builds `serverless/qwen38-27b/Dockerfile`
+for `linux/amd64` and publishes exactly one immutable tag:
+
+```text
+ghcr.io/abhinandval/llama-cpp-qwen38-27b:sha-<full-commit-sha>
+```
+
+The workflow authenticates with the repository `GITHUB_TOKEN` and does not
+deploy or modify anything in RunPod. After the first publication, make the
+GHCR package public once in GitHub: open the package page under your profile's
+**Packages**, open **Package settings**, choose **Change visibility**, select
+**Public**, and confirm. Check the package name and repository before
+confirming because visibility changes can be difficult to reverse.
+
+For a local, non-publishing build, run this from `serverless/qwen38-27b`:
 
 ```bash
-docker build --platform linux/amd64 -t REGISTRY/IMAGE:qwen38-27b-q4km .
-docker push REGISTRY/IMAGE:qwen38-27b-q4km
+docker build --platform linux/amd64 \
+  -t ghcr.io/abhinandval/llama-cpp-qwen38-27b:local .
 ```
 
 The Docker build defaults to one compiler job and uses a portable x86-64 CPU
@@ -37,13 +54,22 @@ parallelism can be increased explicitly, for example:
 
 ```bash
 docker build --platform linux/amd64 --build-arg CMAKE_BUILD_PARALLEL_LEVEL=4 \
-  -t REGISTRY/IMAGE:qwen38-27b-q4km .
+  -t ghcr.io/abhinandval/llama-cpp-qwen38-27b:local .
 ```
 
-Create a RunPod Serverless template from that image in the RunPod console, then use its template ID with the guarded wrapper. This wrapper uses the current `runpodctl serverless create` flags and does not create an endpoint without confirmation:
+Copy the published SHA-tagged image into a RunPod template in the RunPod
+console. Do not attach a Network Volume. Then use its template ID with the
+guarded wrapper; this does not create an endpoint without confirmation:
 
 ```bash
 CONFIRM_CREATE=1 scripts/ops.sh create TEMPLATE_ID qwen38-27b-llama-cpp
+```
+
+Run one bounded smoke test and delete the endpoint afterward:
+
+```bash
+CONFIRM_BILLED=1 scripts/smoke.sh ENDPOINT_ID
+CONFIRM_DELETE=1 scripts/ops.sh delete ENDPOINT_ID
 ```
 
 The template must expose the container entrypoint and have a 24-GB-compatible GPU configuration. Do not attach a Network Volume for this disposable test. The model and llama.cpp cache use `/models` on container disk; that disk is ephemeral, so every new worker may need to redownload the roughly 19-GB model.

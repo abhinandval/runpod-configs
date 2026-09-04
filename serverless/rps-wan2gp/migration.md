@@ -16,9 +16,13 @@ before it is migrated into the public `runpod-configs` monorepo.
 
 The source repository was not clean at migration time:
 
-- Untracked `AGENTS.md` — project-specific automation and generation guidance.
-- Untracked `hello-world.mp4` — user media; preserved.
-- Untracked `lightning_octopus.mp4` — user media; preserved.
+- Untracked `AGENTS.md` — project-specific automation and generation guidance;
+  intentionally excluded from the public monorepo because it contains internal
+  guidance.
+- Untracked `hello-world.mp4` — user media; intentionally excluded from the
+  public monorepo pending content and licensing review.
+- Untracked `lightning_octopus.mp4` — user media; intentionally excluded from
+  the public monorepo pending content and licensing review.
 - Two linked worktrees are present under `.worktrees/`:
   - `feat/jolt-wan2gp-design` at `f554540`.
   - `fix/report-wangp-errors` at `e741e9b`.
@@ -32,12 +36,11 @@ The source repository was not clean at migration time:
 - The `.playwright-mcp/` directory contained generated browser logs, page state,
   and a screenshot. It was removed as generated metadata that could capture
   private or session-specific information, and `.gitignore` now excludes it.
-- The two MP4 files were reviewed as user media by filename and size and were
-  preserved. They are not automatically classified as secrets; review their
-  content and licensing before publishing if needed.
-- `AGENTS.md` was preserved because it is intentional project guidance rather
-  than generated metadata. Review whether these internal automation rules
-  belong in a public monorepo before publishing.
+- `AGENTS.md` and both MP4 files were intentionally excluded from the public
+  monorepo. `AGENTS.md` was excluded because it contains internal automation
+  guidance; the MP4 files were excluded because their content and licensing
+  were not approved for public redistribution. All three remain part of the
+  original source checkout's untracked worktree state described above.
 
 ## Migration caveats
 
@@ -47,7 +50,9 @@ The source repository was not clean at migration time:
    merged into this snapshot.
 3. The monorepo migration must not copy `.git/`; the original repository's
    history remains available from the original remote.
-4. Large media files increase clone and checkout cost. Preserve them for now,
-   but consider Git LFS or a release/object-storage policy before publishing.
+4. The source checkout contained large media files, but both MP4 files were
+   excluded from the public snapshot pending content and licensing approval.
+   Consider Git LFS or a release/object-storage policy if they are later
+   approved for publication.
 5. Re-run secret scanning on the final monorepo, including all sibling
    projects, immediately before the public push.

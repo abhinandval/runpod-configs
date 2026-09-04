@@ -26,7 +26,12 @@ The source repository was not clean at migration time:
 - Two linked worktrees are present under `.worktrees/`:
   - `feat/jolt-wan2gp-design` at `f554540`.
   - `fix/report-wangp-errors` at `e741e9b`.
-- `.worktrees/` is ignored and is not part of the migration snapshot. The linked worktrees and their branch histories remain in the original repository checkout and require separate reconciliation if their work is intended for the monorepo.
+- `.worktrees/` is ignored and is not part of the migration snapshot. The linked worktrees and their branch histories were relocated outside the original checkout and monorepo to a temporary backup, and require separate reconciliation if their work is intended for the monorepo.
+- Before migration, the local linked worktrees were relocated outside the
+  monorepo to a temporary backup, preserving the branch names and commit IDs
+  listed above. The backup location is intentionally not documented here as a
+  personal absolute filesystem path; it is local-only and is not part of the
+  public migration.
 
 ## Public-repository audit
 

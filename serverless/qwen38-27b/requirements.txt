@@ -1,0 +1,2 @@
+# Keep the major version below 2; the worker uses the stable serverless API.
+runpod>=1.7.13,<2

@@ -5,8 +5,8 @@
 [tasks.python-check]
 description = "Run Python tests and bytecode compilation"
 run = [
-  "cd serverless/qwen38-27b && python3 -m unittest discover -s tests -p 'test_*.py' -v",
-  "python3 -m compileall -q serverless/qwen38-27b",
+  "cd serverless/qwen38-27b && PYTHONPATH=. python3 -m unittest discover -s tests -p 'test_*.py' -v",
+  "cd serverless/qwen38-27b && python3 -m compileall -q .",
 ]
 
 [tasks.shell-check]

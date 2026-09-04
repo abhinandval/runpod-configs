@@ -1,0 +1,32 @@
+# Local secrets and environments
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+
+# Python/build artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Tool and editor state
+.playwright-mcp/
+.worktrees/
+.DS_Store
+.idea/
+.vscode/
+
+# Large local model/checkpoint artifacts
+*.gguf
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+
+# Local media/output scratch space
+outputs/
+*.log

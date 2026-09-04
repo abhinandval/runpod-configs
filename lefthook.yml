@@ -1,0 +1,16 @@
+# Install locally with: lefthook install
+# The hook runs only local validation. It never deploys, submits jobs, or
+# requires RunPod/Hugging Face/cloud credentials.
+
+pre-commit:
+  parallel: true
+  commands:
+    config:
+      run: mise run config-check
+    python:
+      run: mise run python-check
+    shell:
+      run: mise run shell-check
+    docker:
+      glob: "**/Dockerfile"
+      run: mise run docker-check

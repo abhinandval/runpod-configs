@@ -15,6 +15,7 @@ Defaults:
 
 This creates a serverless template and endpoint only. It does not start a
 worker or submit a job: workers-min remains 0 and no network volume is used.
+The endpoint requires a host driver compatible with CUDA 12.8.
 Run smoke.sh separately with CONFIRM_BILLED=1 after reviewing the endpoint.
 EOF
 }
@@ -86,6 +87,7 @@ runpodctl serverless create \
   --workers-max 1 \
   --idle-timeout 60 \
   --execution-timeout 180 \
+  --min-cuda-version 12.8 \
   --env MODEL_HF_REF=ggml-org/Qwen3.8-27B-GGUF:Q4_K_M \
   --env MODEL_CACHE_DIR=/models \
   --env LLAMA_CACHE=/models \

@@ -83,6 +83,7 @@ case "$command_name" in
       --workers-max 1 \
       --idle-timeout 60 \
       --execution-timeout 180 \
+      --min-cuda-version 12.8 \
       --env MODEL_HF_REF=ggml-org/Qwen3.8-27B-GGUF:Q4_K_M \
       --env MODEL_CACHE_DIR=/models \
       --env LLAMA_CACHE=/models \

@@ -70,8 +70,9 @@ CONFIRM_CREATE=1 scripts/deploy.sh \
 
 The script requires an immutable SHA-tagged image and pins workers to one
 RTX 4090 with workers-min `0`, workers-max `1`, and a 180-second execution
-timeout. It prints the created template and endpoint JSON; save the endpoint
-ID for the smoke test and later deletion.
+timeout. It also requires a host driver compatible with CUDA 12.8, matching
+the pinned llama.cpp CUDA image. It prints the created template and endpoint
+JSON; save the endpoint ID for the smoke test and later deletion.
 
 Run one bounded smoke test and delete the endpoint afterward:
 

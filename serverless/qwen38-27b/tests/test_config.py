@@ -36,14 +36,13 @@ class ConfigTests(unittest.TestCase):
         self.assertIn("--env MODEL_CACHE_DIR=/models", ops)
         self.assertIn("--env LLAMA_CACHE=/models", ops)
 
-    def test_docker_build_is_emulation_safe_without_weakening_cuda(self):
+    def test_docker_uses_pinned_prebuilt_cuda_server(self):
         dockerfile = Path("Dockerfile").read_text()
-        self.assertIn("ARG CMAKE_BUILD_PARALLEL_LEVEL=1", dockerfile)
-        self.assertIn('-DGGML_NATIVE=OFF', dockerfile)
-        self.assertIn('-DGGML_CPU_ARCH=x86-64', dockerfile)
-        self.assertIn('cmake --build build --config Release --target llama-server -j"${CMAKE_BUILD_PARALLEL_LEVEL}"', dockerfile)
-        self.assertIn("-DGGML_CUDA=ON", dockerfile)
-        self.assertIn('CMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}"', dockerfile)
+        self.assertIn("ghcr.io/ggml-org/llama.cpp@sha256:", dockerfile)
+        self.assertIn("LLAMA_SERVER_BIN=/app/llama-server", dockerfile)
+        self.assertIn("LD_LIBRARY_PATH=/app:/usr/local/cuda/lib64", dockerfile)
+        self.assertIn("--break-system-packages", dockerfile)
+        self.assertNotIn("git clone https://github.com/ggml-org/llama.cpp.git", dockerfile)
 
 
 if __name__ == "__main__":

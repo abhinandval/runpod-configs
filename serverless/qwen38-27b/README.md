@@ -47,15 +47,9 @@ docker build --platform linux/amd64 \
   -t ghcr.io/abhinandval/llama-cpp-qwen38-27b:local .
 ```
 
-The Docker build defaults to one compiler job and uses a portable x86-64 CPU
-variant so it can complete under Apple Silicon/QEMU emulation. The CUDA
-backend and RunPod CUDA architectures are still enabled. On a native builder,
-parallelism can be increased explicitly, for example:
-
-```bash
-docker build --platform linux/amd64 --build-arg CMAKE_BUILD_PARALLEL_LEVEL=4 \
-  -t ghcr.io/abhinandval/llama-cpp-qwen38-27b:local .
-```
+The Dockerfile layers the worker onto the official CUDA-enabled llama.cpp
+`server-cuda` image, pinned by digest. The prebuilt image supplies
+`llama-server` and its CUDA libraries, so CI does not compile llama.cpp.
 
 Copy the published SHA-tagged image into a RunPod template in the RunPod
 console. Do not attach a Network Volume. Then use its template ID with the
@@ -162,7 +156,9 @@ N_UBATCH=128
 
 The 32K context is a stress target, not a promise that every 24-GB card will fit it. Record actual VRAM usage and reduce `N_CTX`, `N_BATCH`, or `N_UBATCH` if startup reports an out-of-memory error. Do not enable a larger GPU as a hidden fallback; the point of this test is the 24-GB envelope.
 
-The Docker image is built with CUDA architectures 8.6 and 8.9 for the RTX 3090/4090/L4 family. The build enables dynamically loadable backends; the builder runs the llama.cpp install step, stages shared libraries and backend artifacts from the full build tree, verifies `libllama`, `libggml`, and `libggml-cuda`, runs an `ldd` missing-library check, and sets runtime `LD_LIBRARY_PATH` for the bundle plus CUDA. The later RX 7900 XTX deployment requires a separate HIP/ROCm build; this NVIDIA endpoint validates model loading and memory behavior, not AMD performance.
+The official CUDA image targets the NVIDIA runtime used by this endpoint. The
+later RX 7900 XTX deployment requires a separate HIP/ROCm image; this NVIDIA
+endpoint validates model loading and memory behavior, not AMD performance.
 
 When loading from Hugging Face, the worker passes `--no-mmproj` so the text-only v1 worker does not fetch a vision projector. Container-disk caching reduces duplicate downloads only while the same worker/container remains alive; it is not persistent storage.
 

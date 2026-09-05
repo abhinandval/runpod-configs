@@ -4,6 +4,11 @@ This project runs the `ggml-org/Qwen3.8-27B-GGUF:Q4_K_M` model behind a RunPod S
 
 The worker is text-only in v1. It accepts OpenAI-style chat messages, returns the llama.cpp chat-completion object, and supports `enable_thinking` by translating it to llama.cpp’s `chat_template_kwargs`.
 
+The RunPod handler registers before starting llama-server. The first request
+may therefore include model download/load time; if startup fails, the error is
+returned by that job instead of leaving the request queued while the worker
+initializes.
+
 ## Cost guardrails
 
 This repository does not execute RunPod operations automatically. `scripts/ops.sh` and `scripts/smoke.sh` refuse billed or mutating commands unless an explicit confirmation environment variable/flag is supplied. The safe default is to inspect endpoints with `list`, `get`, and one-shot `status`.

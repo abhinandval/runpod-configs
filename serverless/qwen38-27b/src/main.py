@@ -8,9 +8,9 @@ from .handler import handler, runtime
 
 
 def main() -> None:
-    # Starting before registration makes model download/load part of the
-    # worker cold start and guarantees the first job sees a ready server.
-    runtime.ensure_started()
+    # Register immediately so RunPod can mark the worker ready. The first job
+    # lazily downloads/loads the model inside the handler, making startup
+    # failures visible in the job result instead of leaving work in the queue.
     runpod.serverless.start({"handler": handler})
 
 

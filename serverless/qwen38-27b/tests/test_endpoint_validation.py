@@ -26,6 +26,18 @@ class EndpointValidationTests(unittest.TestCase):
     def test_accepts_memory_reported_in_megabytes(self):
         validate_endpoint(safe_endpoint(gpu={"name": GPU, "memoryMb": 24576}), GPU)
 
+    def test_accepts_execution_timeout_in_milliseconds(self):
+        document = safe_endpoint()
+        del document["executionTimeout"]
+        document["executionTimeoutMs"] = 180000
+        validate_endpoint(document, GPU)
+
+    def test_accepts_runpod_ada_24_worker_metadata(self):
+        document = safe_endpoint()
+        del document["gpu"]
+        document["workers"] = [{"env": {"RUNPOD_GPU_SIZE": "ADA_24"}}]
+        validate_endpoint(document, GPU)
+
     def test_rejects_wrong_memory(self):
         with self.assertRaisesRegex(ValueError, "exactly 24 GB"):
             validate_endpoint(safe_endpoint(gpu={"name": GPU, "memoryGb": 48}), GPU)

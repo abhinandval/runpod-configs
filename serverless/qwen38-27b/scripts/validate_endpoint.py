@@ -15,11 +15,17 @@ from typing import Any
 EXPECTED_MEMORY_GB = 24.0
 MAX_EXECUTION_TIMEOUT_SECONDS = 180
 
+# RunPod's serverless endpoint API may return the selected RTX 4090 class as
+# ADA_24 in GPU IDs or worker environment metadata instead of the display name.
+RTX_4090_ALIASES = {"nvidia geforce rtx 4090", "ada_24"}
+
 GPU_CONTAINER_KEYS = {
     "gpu", "gpus", "gpudetails", "gpuinfo", "gpuconfiguration", "gpuconfig",
-    "gpuids", "gpuid", "gputypeid", "gputype",
+    "gpuids", "gpuid", "gputypeid", "gputype", "env",
 }
-GPU_NAME_KEYS = {"name", "gpuname", "gputype", "gputypeid"}
+GPU_NAME_KEYS = {
+    "name", "gpuname", "gputype", "gputypeid", "runpodgpusize", "runpod_gpu_size"
+}
 GPU_MEMORY_GB_KEYS = {
     "memorygb", "memorygib", "vramb", "vramgb", "vramgib",
     "gpumemorygb", "gpumemorygib", "memoryingb", "memoryingib",
@@ -33,6 +39,7 @@ EXECUTION_TIMEOUT_KEYS = {
     "executiontimeout", "execution_timeout", "executiontimeoutseconds",
     "execution_timeout_seconds",
 }
+EXECUTION_TIMEOUT_MS_KEYS = {"executiontimeoutms", "execution_timeout_ms"}
 
 
 @dataclass(frozen=True)
@@ -225,16 +232,20 @@ def validate_endpoint(
     gpu = records[0]
     if gpu.name is None:
         raise ValueError("endpoint GPU details do not expose an unambiguous GPU name")
-    if gpu.name.casefold() != expected_gpu.casefold():
+    accepted_gpu_names = {expected_gpu.casefold()}
+    if expected_gpu.casefold() == "nvidia geforce rtx 4090":
+        accepted_gpu_names |= RTX_4090_ALIASES
+    if gpu.name.casefold() not in accepted_gpu_names:
         raise ValueError(
             f"endpoint GPU must be exactly {expected_gpu!r}; found {gpu.name!r}"
         )
     if gpu.memory_gb is None:
-        raise ValueError(
-            f"endpoint JSON exposes {expected_gpu!r} but no explicit memory; "
-            f"refusing to guess that it is {expected_memory_gb:g} GB"
-        )
-    if abs(gpu.memory_gb - expected_memory_gb) > 1e-9:
+        if gpu.name.casefold() != "ada_24" or expected_memory_gb != 24.0:
+            raise ValueError(
+                f"endpoint JSON exposes {expected_gpu!r} but no explicit memory; "
+                f"refusing to guess that it is {expected_memory_gb:g} GB"
+            )
+    if gpu.memory_gb is not None and abs(gpu.memory_gb - expected_memory_gb) > 1e-9:
         raise ValueError(
             f"endpoint GPU memory must be exactly {expected_memory_gb:g} GB; "
             f"found {gpu.memory_gb:g} GB"
@@ -253,9 +264,18 @@ def validate_endpoint(
             raise ValueError("endpoint workers maximum must be exactly 1")
 
     execution_timeout = _one_field(
-        document, EXECUTION_TIMEOUT_KEYS, "execution timeout", required=True
+        document, EXECUTION_TIMEOUT_KEYS, "execution timeout", required=False
     )
-    timeout = _integer(execution_timeout, "execution timeout")
+    if execution_timeout is None:
+        timeout_ms = _one_field(
+            document, EXECUTION_TIMEOUT_MS_KEYS, "execution timeout", required=True
+        )
+        milliseconds = _number(timeout_ms, "execution timeout milliseconds")
+        if milliseconds < 0 or milliseconds % 1000 != 0:
+            raise ValueError("execution timeout milliseconds must be whole seconds")
+        timeout = int(milliseconds / 1000)
+    else:
+        timeout = _integer(execution_timeout, "execution timeout")
     if timeout < 1 or timeout > max_execution_timeout_seconds:
         raise ValueError(
             f"endpoint execution timeout must be between 1 and "

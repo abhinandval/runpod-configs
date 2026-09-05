@@ -81,6 +81,17 @@ CONFIRM_BILLED=1 scripts/smoke.sh ENDPOINT_ID
 CONFIRM_DELETE=1 scripts/ops.sh delete ENDPOINT_ID
 ```
 
+While this worker is being stabilized, purge any stuck queue and worker before
+starting another test. RunPod does not expose a separate serverless cancel
+command; the guarded purge deletes the disposable endpoint, queued jobs, and
+worker allocations together:
+
+```bash
+CONFIRM_PURGE=1 scripts/purge.sh ENDPOINT_ID
+```
+
+Deploy a fresh endpoint with `scripts/deploy.sh` after purging.
+
 The template must expose the container entrypoint and have a 24-GB-compatible GPU configuration. Do not attach a Network Volume for this disposable test. The model and llama.cpp cache use `/models` on container disk; that disk is ephemeral, so every new worker may need to redownload the roughly 19-GB model.
 
 The model can also be cached/configured through endpoint environment variables:

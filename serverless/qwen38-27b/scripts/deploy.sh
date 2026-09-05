@@ -8,6 +8,9 @@ Create a disposable Qwen3.8-27B RunPod Serverless deployment.
 Usage:
   CONFIRM_CREATE=1 deploy.sh [image-ref] [template-name] [endpoint-name]
 
+If a template already exists, set RUNPOD_TEMPLATE_ID to reuse and verify it:
+  CONFIRM_CREATE=1 RUNPOD_TEMPLATE_ID=<template-id> deploy.sh
+
 Defaults:
   image-ref      ghcr.io/abhinandval/llama-cpp-qwen38-27b:sha-d08269d410c0e28082b32695b28607ad934b9ec1
   template-name  qwen38-27b-llama-cpp
@@ -51,15 +54,35 @@ echo "WARNING: creating a serverless template from $image_ref" >&2
 echo "No Network Volume will be attached; container disk is ephemeral." >&2
 echo "The endpoint will use workers-min=0, so this script will not start a worker." >&2
 
-template_json="$(runpodctl template create \
-  --name "$template_name" \
-  --image "$image_ref" \
-  --serverless \
-  --container-disk-in-gb 30 \
-  --output json)"
+template_id="${RUNPOD_TEMPLATE_ID:-}"
+if [[ -n "$template_id" ]]; then
+  [[ "$template_id" =~ ^[A-Za-z0-9_-]+$ ]] || {
+    echo "RUNPOD_TEMPLATE_ID contains unexpected characters." >&2
+    exit 2
+  }
+  template_json="$(runpodctl template get "$template_id" --output json)"
+  template_image="$(printf '%s' "$template_json" | python3 -c '
+import json
+import sys
 
-printf '%s\n' "$template_json"
-template_id="$(printf '%s' "$template_json" | python3 -c '
+payload = json.load(sys.stdin)
+print(payload.get("imageName", ""))
+')"
+  [[ "$template_image" == "$image_ref" ]] || {
+    echo "Existing template image does not match requested immutable image." >&2
+    exit 2
+  }
+  printf '%s\n' "$template_json"
+else
+  template_json="$(runpodctl template create \
+    --name "$template_name" \
+    --image "$image_ref" \
+    --serverless \
+    --container-disk-in-gb 30 \
+    --output json)"
+
+  printf '%s\n' "$template_json"
+  template_id="$(printf '%s' "$template_json" | python3 -c '
 import json
 import sys
 
@@ -76,6 +99,7 @@ for candidate in (
 else:
     raise SystemExit("template create response did not contain a template ID")
 ')"
+fi
 
 echo "Created template $template_id; creating endpoint $endpoint_name." >&2
 runpodctl serverless create \

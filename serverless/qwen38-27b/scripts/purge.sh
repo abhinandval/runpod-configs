@@ -27,5 +27,14 @@ endpoint_id="$1"
   exit 2
 }
 
+endpoint_list="$(runpodctl serverless list --output json)"
+if ! printf '%s' "$endpoint_list" | python3 -c \
+  'import json, sys; endpoint_id = sys.argv[1]; payload = json.load(sys.stdin); raise SystemExit(0 if any(isinstance(item, dict) and item.get("id") == endpoint_id for item in payload) else 1)' \
+  "$endpoint_id"
+then
+  echo "Endpoint $endpoint_id is already absent; nothing to purge." >&2
+  exit 0
+fi
+
 echo "WARNING: deleting endpoint $endpoint_id and purging queued work/workers." >&2
 exec runpodctl serverless delete "$endpoint_id" --output json

@@ -90,7 +90,10 @@ worker allocations together:
 CONFIRM_PURGE=1 scripts/purge.sh ENDPOINT_ID
 ```
 
-Deploy a fresh endpoint with `scripts/deploy.sh` after purging.
+Deploy a fresh endpoint with `scripts/deploy.sh` after purging. If the
+template already exists, reuse it explicitly with
+`RUNPOD_TEMPLATE_ID=zyhg00liv1` so the script verifies its image instead of
+trying to create a duplicate template.
 
 The template must expose the container entrypoint and have a 24-GB-compatible GPU configuration. Do not attach a Network Volume for this disposable test. The model and llama.cpp cache use `/models` on container disk; that disk is ephemeral, so every new worker may need to redownload the roughly 19-GB model.
 

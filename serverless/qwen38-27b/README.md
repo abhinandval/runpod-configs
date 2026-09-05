@@ -51,13 +51,27 @@ The Dockerfile layers the worker onto the official CUDA-enabled llama.cpp
 `server-cuda` image, pinned by digest. The prebuilt image supplies
 `llama-server` and its CUDA libraries, so CI does not compile llama.cpp.
 
-Copy the published SHA-tagged image into a RunPod template in the RunPod
-console. Do not attach a Network Volume. Then use its template ID with the
-guarded wrapper; this does not create an endpoint without confirmation:
+The guarded deployment script creates a Serverless template from the
+published SHA-tagged image and then creates the endpoint. It does not attach a
+Network Volume, start a worker, or submit a job. Review the image and names
+before running it:
 
 ```bash
-CONFIRM_CREATE=1 scripts/ops.sh create TEMPLATE_ID qwen38-27b-llama-cpp
+CONFIRM_CREATE=1 scripts/deploy.sh
 ```
+
+To deploy a different published SHA tag or use different names:
+
+```bash
+CONFIRM_CREATE=1 scripts/deploy.sh \
+  ghcr.io/abhinandval/llama-cpp-qwen38-27b:sha-<full-commit-sha> \
+  qwen38-27b-llama-cpp qwen38-27b-llama-cpp
+```
+
+The script requires an immutable SHA-tagged image and pins workers to one
+RTX 4090 with workers-min `0`, workers-max `1`, and a 180-second execution
+timeout. It prints the created template and endpoint JSON; save the endpoint
+ID for the smoke test and later deletion.
 
 Run one bounded smoke test and delete the endpoint afterward:
 

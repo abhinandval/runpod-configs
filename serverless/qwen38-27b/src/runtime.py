@@ -112,7 +112,10 @@ class LlamaServer:
         )
 
     def _healthcheck(self) -> None:
-        url = f"http://{self.settings.server_host}:{self.settings.server_port}/health"
+        health_host = self.settings.server_host
+        if health_host in {"0.0.0.0", "::"}:
+            health_host = "127.0.0.1"
+        url = f"http://{health_host}:{self.settings.server_port}/health"
         request = urllib.request.Request(url, method="GET")
         try:
             with urllib.request.urlopen(request, timeout=2) as response:
@@ -166,3 +169,11 @@ class LlamaServer:
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait(timeout=5)
+
+    def wait(self) -> int:
+        """Wait for the server process and return its exit code."""
+        with self._lock:
+            process = self._process
+        if process is None:
+            raise RuntimeError("llama-server is not running")
+        return process.wait()

@@ -12,9 +12,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     MODEL_CACHE_DIR=/models \
     LLAMA_CACHE=/models \
     LLAMA_SERVER_BIN=/app/llama-server \
-    LD_LIBRARY_PATH=/app:/usr/local/cuda/lib64 \
-    SERVER_HOST=127.0.0.1 \
-    SERVER_PORT=8080
+    LD_LIBRARY_PATH=/app:/usr/local/cuda/lib64
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -32,5 +30,7 @@ COPY src /opt/app/src
 # Model downloads and the llama.cpp cache live on ephemeral container disk.
 # New workers will redownload the model.
 RUN mkdir -p /models
+
+EXPOSE 8080
 
 ENTRYPOINT ["python3", "-m", "src.main"]

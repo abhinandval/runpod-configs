@@ -25,6 +25,7 @@ def _optional_int(name: str) -> int | None:
 
 @dataclass(frozen=True)
 class Settings:
+    worker_mode: str
     model_hf_ref: str
     model_path: str | None
     model_cache_dir: str
@@ -48,6 +49,10 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        worker_mode = (os.getenv("RUNPOD_WORKER_MODE") or "queue").strip().lower()
+        if worker_mode not in {"queue", "http"}:
+            raise ValueError("RUNPOD_WORKER_MODE must be one of: queue, http")
+
         model_path = os.getenv("MODEL_PATH") or None
         llama_cache = os.getenv("LLAMA_CACHE") or os.getenv(
             "MODEL_CACHE_DIR", "/models"
@@ -57,7 +62,17 @@ class Settings:
         if flash_attn and flash_attn not in {"on", "off", "auto"}:
             raise ValueError("FLASH_ATTN must be one of: on, off, auto")
 
+        default_host = "0.0.0.0" if worker_mode == "http" else "127.0.0.1"
+        if worker_mode == "http":
+            # RunPod Load Balancing supplies PORT. SERVER_PORT remains a useful
+            # local fallback, but PORT always wins when the platform sets it.
+            default_port = _int("SERVER_PORT", 8080)
+            default_port = _int("PORT", default_port)
+        else:
+            default_port = 8080
+
         settings = cls(
+            worker_mode=worker_mode,
             model_hf_ref=os.getenv(
                 "MODEL_HF_REF", "ggml-org/Qwen3.8-27B-GGUF:Q4_K_M"
             ),
@@ -65,8 +80,8 @@ class Settings:
             model_cache_dir=model_cache_dir,
             llama_cache=llama_cache,
             llama_server_bin=os.getenv("LLAMA_SERVER_BIN", "llama-server"),
-            server_host=os.getenv("SERVER_HOST", "127.0.0.1").strip(),
-            server_port=_int("SERVER_PORT", 8080),
+            server_host=(os.getenv("SERVER_HOST") or default_host).strip(),
+            server_port=_int("SERVER_PORT", default_port) if worker_mode == "queue" else default_port,
             startup_timeout_seconds=_int("SERVER_STARTUP_TIMEOUT_SECONDS", 900),
             request_timeout_seconds=_int("REQUEST_TIMEOUT_SECONDS", 180),
             n_ctx=_int("N_CTX", 32768),

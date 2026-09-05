@@ -26,6 +26,27 @@ GPU count         1
 
 `workers-min=0` prevents an always-on worker. A request can still start a billed worker. Review the request and endpoint before using any command that includes `CONFIRM_BILLED=1` or `--confirm-billed`.
 
+## Deployment modes
+
+The image supports two explicit transports:
+
+| Mode | Setting | Public API | Streaming | Use case |
+| --- | --- | --- | --- | --- |
+| Queue | `RUNPOD_WORKER_MODE=queue` (default) | RunPod `/run` and `/status` | No | Guarded Serverless jobs and the local shim |
+| HTTP | `RUNPOD_WORKER_MODE=http` | `https://ENDPOINT_ID.api.runpod.ai/v1` | Yes | OpenAI clients and Open WebUI |
+
+HTTP mode runs the same native `llama-server` already supplied by the pinned
+CUDA image. It binds to `0.0.0.0` and uses RunPod's `PORT` value, so no second
+FastAPI router or model proxy is installed in the image. The native server
+provides `/v1/models`, `/v1/chat/completions`, streaming responses, and
+`/health`.
+
+This is the same basic architecture as RunPod's `worker-vllm` listing: the
+worker image owns an OpenAI-compatible HTTP server and a Load Balancer routes
+requests directly to that worker. It is different from a queue endpoint,
+whose public transport is `/v2/ENDPOINT_ID/run` and whose request result is
+polled through `/status`.
+
 ## Build and publish
 
 The repository contains a manual-only workflow at
@@ -56,19 +77,31 @@ The Dockerfile layers the worker onto the official CUDA-enabled llama.cpp
 `server-cuda` image, pinned by digest. The prebuilt image supplies
 `llama-server` and its CUDA libraries, so CI does not compile llama.cpp.
 
-The guarded deployment script creates a Serverless template from the
-published SHA-tagged image and then creates the endpoint. It does not attach a
-Network Volume, start a worker, or submit a job. Review the image and names
-before running it:
+The guarded deployment script is an end-to-end flow. It checks the CLI and
+template, creates the endpoint, validates its safety settings, writes a log,
+submits a bounded `pong` prompt, validates the exact response, and prints the
+endpoint/job status. It reuses the existing template `zyhg00liv1` by default
+and requires that its image exactly match the requested immutable tag. Review
+the image and names before running it:
 
 ```bash
-CONFIRM_CREATE=1 scripts/deploy.sh
+CONFIRM_CREATE=1 CONFIRM_BILLED=1 scripts/deploy.sh
 ```
+
+The E2E flow permits at most three deployment attempts per execution. Each
+attempt captures a job ID before waiting for up to 180 seconds. After a failed
+or ambiguous attempt, it shows status and asks whether to purge the endpoint,
+queued work, and workers before redeploying. Set `CONFIRM_PURGE=1` for the
+noninteractive equivalent. An ambiguous still-running job is never duplicated
+without purging. The endpoint is retained with workers-min `0` after a
+successful test or when retry is declined; the log path is printed in the
+final status section. Set `RUNPOD_LOG_FILE` to choose an exact log path, or
+`RUNPOD_LOG_DIR` to choose the default log directory.
 
 To deploy a different published SHA tag or use different names:
 
 ```bash
-CONFIRM_CREATE=1 scripts/deploy.sh \
+CONFIRM_CREATE=1 CONFIRM_BILLED=1 scripts/deploy.sh \
   ghcr.io/abhinandval/llama-cpp-qwen38-27b:sha-<full-commit-sha> \
   qwen38-27b-llama-cpp qwen38-27b-llama-cpp
 ```
@@ -76,14 +109,19 @@ CONFIRM_CREATE=1 scripts/deploy.sh \
 The script requires an immutable SHA-tagged image and pins workers to one
 RTX 4090 with workers-min `0`, workers-max `1`, and a 180-second execution
 timeout. It also requires a host driver compatible with CUDA 12.8, matching
-the pinned llama.cpp CUDA image. It prints the created template and endpoint
-JSON; save the endpoint ID for the smoke test and later deletion.
-
-Run one bounded smoke test and delete the endpoint afterward:
+the pinned llama.cpp CUDA image. If an endpoint with the same name already
+exists, add `CONFIRM_PURGE=1` to explicitly replace it; the old endpoint,
+queued work, and workers are purged first:
 
 ```bash
-CONFIRM_BILLED=1 scripts/smoke.sh ENDPOINT_ID
-CONFIRM_DELETE=1 scripts/ops.sh delete ENDPOINT_ID
+CONFIRM_CREATE=1 CONFIRM_BILLED=1 CONFIRM_PURGE=1 \
+  RUNPOD_TEMPLATE_ID=zyhg00liv1 scripts/deploy.sh
+```
+
+Delete the retained endpoint after inspection:
+
+```bash
+CONFIRM_PURGE=1 scripts/purge.sh ENDPOINT_ID
 ```
 
 While this worker is being stabilized, purge any stuck queue and worker before
@@ -95,10 +133,63 @@ worker allocations together:
 CONFIRM_PURGE=1 scripts/purge.sh ENDPOINT_ID
 ```
 
-Deploy a fresh endpoint with `scripts/deploy.sh` after purging. If the
-template already exists, reuse it explicitly with
-`RUNPOD_TEMPLATE_ID=zyhg00liv1` so the script verifies its image instead of
-trying to create a duplicate template.
+Deploy a fresh endpoint with `scripts/deploy.sh` after purging. To create a
+new template instead of reusing `zyhg00liv1`, set `RUNPOD_TEMPLATE_ID` to an
+empty value; the script will create a serverless template and verify it before
+creating the endpoint.
+
+### Direct HTTP / OpenAI deployment
+
+Prepare an HTTP-capable template with the RunPod CLI:
+
+```bash
+CONFIRM_CREATE=1 scripts/deploy-http.sh prepare \
+  ghcr.io/abhinandval/llama-cpp-qwen38-27b:sha-<full-commit-sha>
+```
+
+The helper creates or verifies the template only. It intentionally never runs
+`runpodctl serverless create`, because the installed CLI does not provide a
+Load Balancer endpoint-type flag. In the RunPod Console, create the endpoint
+from the printed template with these settings:
+
+```text
+Endpoint type       Load Balancer
+GPU                 NVIDIA GeForce RTX 4090
+GPU count           1
+Workers min/max     0 / 1
+Container port      8080/http
+Network Volume      none
+RUNPOD_WORKER_MODE  http
+SERVER_HOST         0.0.0.0
+PORT                8080
+PORT_HEALTH         8080
+HEALTH_CHECK_PATH   /health
+```
+
+After the endpoint is created, validate routing and model discovery without
+submitting a chat request:
+
+```bash
+CONFIRM_BILLED=1 RUNPOD_API_KEY=your-runpod-api-key \
+  scripts/deploy-http.sh check ENDPOINT_ID
+```
+
+Because `workers-min=0` is retained as a cost guardrail, the first HTTP
+request can cold-start the GPU worker and download the model to ephemeral
+`/models`. Keep the endpoint at `workers-min=0` for disposable testing; use
+`workers-min=1` only when the Open WebUI installation needs a continuously
+warm worker and the ongoing GPU cost is intentional.
+
+The direct OpenAI base URL is:
+
+```text
+https://ENDPOINT_ID.api.runpod.ai/v1
+```
+
+Use the RunPod API key as the bearer/API key and select the model ID returned
+by `/v1/models`. For Open WebUI, add an OpenAI-compatible connection with that
+base URL and key; do not append `/chat/completions` to the configured base URL.
+The direct HTTP endpoint supports streaming, unlike the local queue shim.
 
 The template must expose the container entrypoint and have a 24-GB-compatible GPU configuration. Do not attach a Network Volume for this disposable test. The model and llama.cpp cache use `/models` on container disk; that disk is ephemeral, so every new worker may need to redownload the roughly 19-GB model.
 
@@ -136,7 +227,19 @@ CONFIRM_DELETE=1 scripts/ops.sh delete ENDPOINT_ID
 
 ## Bounded smoke test
 
-The smoke test first performs a read-only, fail-closed endpoint preflight, then uses `runpodctl serverless run` (not `/runsync`). The preflight requests `--include-template --include-workers` and requires exactly one `NVIDIA GeForce RTX 4090`, explicit 24-GB memory, `workersMin=0`, `workersMax=1`, and an explicit execution timeout from 1 through 180 seconds. Missing, conflicting, or ambiguous fields are rejected; memory is never inferred from the GPU name. It submits one tiny prompt, disables reasoning, limits generation to 8 tokens, and waits at most 90 seconds. It may start a billed worker:
+The smoke test first performs a read-only, fail-closed endpoint preflight, then
+uses `runpodctl serverless run --no-wait` (not `/runsync`) to capture a job ID
+before polling `serverless status`. The preflight requests
+`--include-template --include-workers` and requires exactly one `NVIDIA GeForce
+RTX 4090`, explicit 24-GB memory, `workersMin=0`, `workersMax=1`, and an
+explicit execution timeout from 1 through 180 seconds. Missing, conflicting,
+or ambiguous fields are rejected; memory is never inferred from the GPU name.
+It submits one tiny prompt, disables reasoning, limits generation to 8 tokens,
+and waits at most 180 seconds. A terminal failure can be retried by setting
+`SMOKE_MAX_ATTEMPTS`; an ambiguous timeout is never retried because the remote
+job may still be running. The deployment flow uses one job per deployment
+attempt and offers purge/redeploy between attempts. It may start a billed
+worker:
 
 ```bash
 CONFIRM_BILLED=1 scripts/smoke.sh ENDPOINT_ID
@@ -175,6 +278,48 @@ Example handler payload:
 ```
 
 `stream=true` is rejected in v1 because RunPod job output is synchronous. `max_tokens` is clamped to `MAX_REQUEST_TOKENS` (default 2048). The handler returns an `{"error": ...}` object for validation, startup, or llama-server failures so failures remain visible in the job output.
+
+## OpenAI-compatible shim
+
+For the default queue mode, `scripts/openai_shim.py` provides a small local
+gateway for applications that require the OpenAI SDK: it accepts
+`/v1/chat/completions`, wraps the request as RunPod `input`, waits for the job,
+and unwraps the OpenAI-shaped `output`. Use the direct HTTP mode above when a
+public OpenAI-compatible endpoint or streaming is required.
+
+Start the shim beside the endpoint:
+
+```bash
+export RUNPOD_ENDPOINT_ID=ENDPOINT_ID
+export RUNPOD_API_KEY=your-runpod-api-key
+export OPENAI_SHIM_API_KEY=local-shim-secret
+python3 scripts/openai_shim.py
+```
+
+Then use the standard OpenAI client against the local shim:
+
+```python
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    api_key=os.environ["OPENAI_SHIM_API_KEY"],
+    base_url="http://127.0.0.1:8000/v1",
+)
+response = client.chat.completions.create(
+    model="qwen38-27b-q4_k_m",
+    messages=[{"role": "user", "content": "Hello"}],
+    max_tokens=128,
+)
+print(response.choices[0].message.content)
+```
+
+The shim is synchronous and does not support streaming. It defaults to
+localhost, requires its own bearer key, and waits up to 180 seconds. If the
+wait expires, the remote RunPod job may still be running; the error includes
+the job ID and must not be retried automatically. For public access, put the
+shim behind TLS and an authenticated reverse proxy or gateway. It is not
+automatically deployed inside the RunPod worker.
 
 ## Configuration and memory tuning
 

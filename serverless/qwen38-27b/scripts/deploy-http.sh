@@ -71,7 +71,8 @@ payload = json.load(sys.stdin)
 expected_image = os.environ["EXPECTED_HTTP_IMAGE"]
 image = payload.get("imageName") or payload.get("image") or ""
 if image != expected_image:
-    raise SystemExit(f"template image mismatch: expected {expected_image}, found {image or '<missing>'}")
+    found_image = image or "<missing>"
+    raise SystemExit(f"template image mismatch: expected {expected_image}, found {found_image}")
 
 volume = payload.get("volumeInGb", payload.get("volumeSize", 0)) or 0
 if volume != 0:

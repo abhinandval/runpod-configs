@@ -311,9 +311,11 @@ cd serverless/qwen38-27b/scripts
 ```
 
 The first invocation creates the environment file and stops. The second
-installs and starts the service. It binds only to `127.0.0.1:8000`; terminate
-TLS and perform public routing in a VPS reverse proxy (for example Caddy or
-nginx). To follow service logs:
+installs and starts the service. It binds to `127.0.0.1:8000` by default;
+terminate TLS and perform public routing in a VPS reverse proxy (for example
+Caddy or nginx). For direct access over a private/Tailscale interface, set
+`OPENAI_SHIM_HOST=0.0.0.0` (or the specific interface address) in the env file
+before rerunning the installer. To follow service logs:
 
 ```bash
 systemctl --user status qwen38-openai-shim

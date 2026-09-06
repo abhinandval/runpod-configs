@@ -24,6 +24,21 @@ class HandlerTests(unittest.TestCase):
                 {"messages": [{"role": "user", "content": "ping"}], "stream": True}
             )
 
+    def test_preserves_multimodal_content_and_tools(self):
+        payload = {
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "What is shown?"},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,AA=="}},
+                ],
+            }],
+            "tools": [{"type": "function", "function": {"name": "lookup", "parameters": {}}}],
+        }
+        request = _build_request(payload)
+        self.assertEqual(request["messages"], payload["messages"])
+        self.assertEqual(request["tools"], payload["tools"])
+
     def test_handler_returns_worker_error_object(self):
         with patch("src.handler.runtime.chat_completion", side_effect=RuntimeError("boom")):
             result = handler({"input": {"messages": [{"role": "user", "content": "ping"}]}})

@@ -393,7 +393,12 @@ The official CUDA image targets the NVIDIA runtime used by this endpoint. The
 later RX 7900 XTX deployment requires a separate HIP/ROCm image; this NVIDIA
 endpoint validates model loading and memory behavior, not AMD performance.
 
-When loading from Hugging Face, the worker passes `--no-mmproj` so the text-only v1 worker does not fetch a vision projector. Container-disk caching reduces duplicate downloads only while the same worker/container remains alive; it is not persistent storage.
+When loading from Hugging Face, the worker leaves multimodal projector
+resolution enabled so Qwen3.8 can accept OpenAI image content. The queue
+handler preserves `tools`, `tool_choice`, and multimodal message content for
+llama.cpp's chat template. Streaming remains disabled by the synchronous
+queue transport. Container-disk caching reduces duplicate downloads only
+while the same worker/container remains alive; it is not persistent storage.
 
 `runpodctl serverless update` cannot change an endpoint’s execution timeout. The guarded update command reads endpoint JSON with template and worker details, rejects missing or unsafe GPU/memory/timeout data before mutation, changes only scaling and idle timeout, then runs the full strict preflight again. Endpoint creation explicitly sets `--gpu-count 1`, workers-min `0`, workers-max `1`, and execution-timeout `180`; no unsupported update timeout flag is invented.
 

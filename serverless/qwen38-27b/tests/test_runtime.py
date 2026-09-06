@@ -15,7 +15,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("-hf", command)
         self.assertIn("org/model:Q4_K_M", command)
         self.assertIn("-ngl", command)
-        self.assertIn("--no-mmproj", command)
+        self.assertNotIn("--no-mmproj", command)
 
     def test_command_does_not_disable_mmproj_for_local_model(self):
         with patch.dict(os.environ, {"MODEL_PATH": "/models/model.gguf"}, clear=False):

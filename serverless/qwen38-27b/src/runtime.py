@@ -49,7 +49,10 @@ class LlamaServer:
         if settings.model_path:
             command.extend(["-m", settings.model_path])
         else:
-            command.extend(["-hf", settings.model_hf_ref, "--no-mmproj"])
+            # Do not disable the projector: Qwen3.8 is multimodal and the
+            # Hugging Face resolver can fetch the matching mmproj alongside
+            # the selected GGUF.
+            command.extend(["-hf", settings.model_hf_ref])
         if settings.threads:
             command.extend(["-t", str(settings.threads)])
         if settings.flash_attn:

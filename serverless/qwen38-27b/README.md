@@ -296,6 +296,38 @@ export OPENAI_SHIM_API_KEY=local-shim-secret
 python3 scripts/openai_shim.py
 ```
 
+### VPS container
+
+The shim can run as a minimal, separate container on a VPS. It uses only the
+Python standard library; the RunPod worker and model are not included. Build
+context is `serverless/qwen38-27b`, and secrets are injected at runtime rather
+than copied into the image:
+
+```bash
+cd serverless/qwen38-27b/scripts
+cp .env.openai-shim.example .env.openai-shim
+chmod 600 .env.openai-shim
+# Edit .env.openai-shim with the Queue endpoint ID and two distinct secrets.
+docker compose -f openai-shim.compose.yaml up --build -d
+```
+
+The Compose file binds the shim only to `127.0.0.1:8000`. Terminate TLS and
+perform any public routing in a VPS reverse proxy (for example Caddy or nginx).
+The container requires these runtime values:
+
+```text
+RUNPOD_ENDPOINT_ID     Queue endpoint ID
+RUNPOD_API_KEY         RunPod key permitted to submit/read this endpoint's jobs
+OPENAI_SHIM_API_KEY    Separate client-facing bearer secret; never reuse the RunPod key
+```
+
+Check the local container before exposing it through a reverse proxy:
+
+```bash
+curl http://127.0.0.1:8000/health
+curl -H "Authorization: Bearer $OPENAI_SHIM_API_KEY" http://127.0.0.1:8000/v1/models
+```
+
 Then use the standard OpenAI client against the local shim:
 
 ```python

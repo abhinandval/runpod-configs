@@ -1,6 +1,7 @@
 # Local secrets and environments
 .env
 .env.*
+!.env.openai-shim.example
 !.env.example
 .venv/
 venv/

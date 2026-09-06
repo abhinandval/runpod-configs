@@ -1,0 +1,17 @@
+FROM python:3.13-alpine
+
+WORKDIR /app
+
+COPY scripts/openai_shim.py /app/openai_shim.py
+
+RUN addgroup -S shim && adduser -S -G shim shim
+
+USER shim
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD python3 -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health', timeout=2)"
+
+ENTRYPOINT ["python3", "/app/openai_shim.py"]
+CMD ["--host", "0.0.0.0", "--port", "8000"]

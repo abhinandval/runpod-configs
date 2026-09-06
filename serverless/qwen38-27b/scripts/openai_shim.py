@@ -227,13 +227,13 @@ def main() -> None:
     parser.add_argument("--wait-seconds", type=float, default=float(os.getenv("OPENAI_SHIM_WAIT_SECONDS", "180")))
     args = parser.parse_args()
     runpod_api_key = os.getenv("RUNPOD_API_KEY")
-    shim_api_key = os.getenv("OPENAI_SHIM_API_KEY") or runpod_api_key
+    shim_api_key = os.getenv("OPENAI_SHIM_API_KEY")
     if not args.endpoint_id:
         parser.error("set RUNPOD_ENDPOINT_ID or pass --endpoint-id")
     if not runpod_api_key:
         parser.error("set RUNPOD_API_KEY")
     if not shim_api_key:
-        parser.error("set OPENAI_SHIM_API_KEY or RUNPOD_API_KEY")
+        parser.error("set OPENAI_SHIM_API_KEY to a separate client-facing secret")
     if args.port < 1 or args.port > 65535:
         parser.error("--port must be between 1 and 65535")
     if args.wait_seconds <= 0:

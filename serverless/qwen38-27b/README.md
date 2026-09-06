@@ -296,24 +296,37 @@ export OPENAI_SHIM_API_KEY=local-shim-secret
 python3 scripts/openai_shim.py
 ```
 
-### VPS container
+### VPS systemd service
 
-The shim can run as a minimal, separate container on a VPS. It uses only the
-Python standard library; the RunPod worker and model are not included. Build
-context is `serverless/qwen38-27b`, and secrets are injected at runtime rather
-than copied into the image:
+The shim uses only the Python standard library and runs directly on the VPS;
+the RunPod worker and model are not included. It uses the existing `uv`
+installation and a user-level systemd service. Secrets are kept outside the
+repository in a mode-600 environment file:
 
 ```bash
 cd serverless/qwen38-27b/scripts
-cp .env.openai-shim.example .env.openai-shim
-chmod 600 .env.openai-shim
-# Edit .env.openai-shim with the Queue endpoint ID and two distinct secrets.
-docker compose -f openai-shim.compose.yaml up --build -d
+./install-openai-shim-systemd.sh
+# Edit ~/.config/qwen38-openai-shim.env with the Queue endpoint ID and secrets.
+./install-openai-shim-systemd.sh
 ```
 
-The Compose file binds the shim only to `127.0.0.1:8000`. Terminate TLS and
-perform any public routing in a VPS reverse proxy (for example Caddy or nginx).
-The container requires these runtime values:
+The first invocation creates the environment file and stops. The second
+installs and starts the service. It binds only to `127.0.0.1:8000`; terminate
+TLS and perform public routing in a VPS reverse proxy (for example Caddy or
+nginx). To follow service logs:
+
+```bash
+systemctl --user status qwen38-openai-shim
+journalctl --user -u qwen38-openai-shim -f
+```
+
+Enable the user service to survive logout/reboot if required:
+
+```bash
+loginctl enable-linger "$USER"
+```
+
+The service requires these runtime values:
 
 ```text
 RUNPOD_ENDPOINT_ID     Queue endpoint ID
@@ -321,7 +334,7 @@ RUNPOD_API_KEY         RunPod key permitted to submit/read this endpoint's jobs
 OPENAI_SHIM_API_KEY    Separate client-facing bearer secret; never reuse the RunPod key
 ```
 
-Check the local container before exposing it through a reverse proxy:
+Check the local service before exposing it through a reverse proxy:
 
 ```bash
 curl http://127.0.0.1:8000/health

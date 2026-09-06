@@ -336,6 +336,13 @@ RUNPOD_API_KEY         RunPod key permitted to submit/read this endpoint's jobs
 OPENAI_SHIM_API_KEY    Separate client-facing bearer secret; never reuse the RunPod key
 ```
 
+`GET /v1/models` also reports proxy metadata: llama.cpp backend, Q4_K_M
+quantization, 32768-token context, 2048-token output cap, chat support, and
+the fact that streaming, tools, vision, embeddings, and text completions are
+not exposed by this queue shim. Override the context and output values with
+`OPENAI_SHIM_CONTEXT_WINDOW` and `OPENAI_SHIM_MAX_OUTPUT_TOKENS` when the
+worker configuration changes.
+
 Check the local service before exposing it through a reverse proxy:
 
 ```bash

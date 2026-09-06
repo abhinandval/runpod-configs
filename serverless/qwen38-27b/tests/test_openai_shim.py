@@ -1,9 +1,16 @@
 import unittest
 
-from scripts.openai_shim import ShimError, run_chat_completion
+from scripts.openai_shim import ShimError, model_listing, run_chat_completion
 
 
 class OpenAIShimTests(unittest.TestCase):
+    def test_model_listing_advertises_proxy_capabilities(self):
+        model = model_listing("qwen", 32768, 2048)["data"][0]
+        self.assertEqual(model["capabilities"]["chat"], True)
+        self.assertEqual(model["capabilities"]["streaming"], False)
+        self.assertEqual(model["metadata"]["quantization"], "Q4_K_M")
+        self.assertEqual(model["metadata"]["context_window"], 32768)
+
     def test_wraps_input_polls_and_unwraps_openai_output(self):
         calls = []
         responses = iter([

@@ -21,6 +21,8 @@ from urllib.request import Request, urlopen
 
 TERMINAL_STATUSES = {"COMPLETED", "FAILED", "CANCELLED", "TIMED_OUT"}
 DEFAULT_MODEL = "qwen38-27b-q4_k_m"
+DEFAULT_CONTEXT_WINDOW = 32768
+DEFAULT_MAX_OUTPUT_TOKENS = 2048
 JsonRequest = Callable[[str, str, dict[str, Any] | None, float], dict[str, Any]]
 
 
@@ -138,6 +140,34 @@ def _json_bytes(payload: dict[str, Any]) -> bytes:
     return json.dumps(payload, separators=(",", ":")).encode("utf-8")
 
 
+def model_listing(model_name: str, context_window: int, max_output_tokens: int) -> dict[str, Any]:
+    """Return OpenAI-compatible model data plus proxy capability metadata."""
+    return {
+        "object": "list",
+        "data": [{
+            "id": model_name,
+            "object": "model",
+            "owned_by": "runpod",
+            "root": model_name,
+            "parent": None,
+            "capabilities": {
+                "chat": True,
+                "completions": False,
+                "streaming": False,
+                "tools": False,
+                "vision": False,
+                "embeddings": False,
+            },
+            "metadata": {
+                "backend": "llama.cpp",
+                "quantization": "Q4_K_M",
+                "context_window": context_window,
+                "max_output_tokens": max_output_tokens,
+            },
+        }],
+    }
+
+
 class ShimHandler(BaseHTTPRequestHandler):
     server: "ShimServer"
 
@@ -171,10 +201,11 @@ class ShimHandler(BaseHTTPRequestHandler):
             if not self._authorized():
                 self._write_json({"error": {"message": "authentication required", "type": "authentication_error"}}, 401)
                 return
-            self._write_json({
-                "object": "list",
-                "data": [{"id": self.server.model_name, "object": "model", "owned_by": "runpod"}],
-            })
+            self._write_json(model_listing(
+                self.server.model_name,
+                self.server.context_window,
+                self.server.max_output_tokens,
+            ))
             return
         self._write_json({"error": {"message": "not found", "type": "not_found_error"}}, 404)
 
@@ -210,13 +241,15 @@ class ShimHandler(BaseHTTPRequestHandler):
 class ShimServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, address: tuple[str, int], endpoint_id: str, runpod_api_key: str, shim_api_key: str, model_name: str, wait_seconds: float):
+    def __init__(self, address: tuple[str, int], endpoint_id: str, runpod_api_key: str, shim_api_key: str, model_name: str, wait_seconds: float, context_window: int, max_output_tokens: int):
         super().__init__(address, ShimHandler)
         self.endpoint_id = endpoint_id
         self.runpod_api_key = runpod_api_key
         self.shim_api_key = shim_api_key
         self.model_name = model_name
         self.wait_seconds = wait_seconds
+        self.context_window = context_window
+        self.max_output_tokens = max_output_tokens
 
 
 def main() -> None:
@@ -238,6 +271,10 @@ def main() -> None:
         parser.error("--port must be between 1 and 65535")
     if args.wait_seconds <= 0:
         parser.error("--wait-seconds must be positive")
+    context_window = int(os.getenv("OPENAI_SHIM_CONTEXT_WINDOW", str(DEFAULT_CONTEXT_WINDOW)))
+    max_output_tokens = int(os.getenv("OPENAI_SHIM_MAX_OUTPUT_TOKENS", str(DEFAULT_MAX_OUTPUT_TOKENS)))
+    if context_window <= 0 or max_output_tokens <= 0:
+        parser.error("OPENAI_SHIM_CONTEXT_WINDOW and OPENAI_SHIM_MAX_OUTPUT_TOKENS must be positive")
 
     server = ShimServer(
         (args.host, args.port),
@@ -246,6 +283,8 @@ def main() -> None:
         shim_api_key,
         os.getenv("OPENAI_SHIM_MODEL", DEFAULT_MODEL),
         args.wait_seconds,
+        context_window,
+        max_output_tokens,
     )
     print(f"OpenAI shim listening on http://{args.host}:{args.port}/v1", flush=True)
     print(f"RunPod endpoint: {args.endpoint_id}; request wait: {args.wait_seconds:g}s", flush=True)
